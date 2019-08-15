@@ -1,0 +1,63 @@
+version: '3.7'
+services:
+
+  ### PostgreSQL ###
+  pg:
+    image: postgres:latest
+    ports:
+      - 5432:5432
+    environment:
+      - POSTGRES_USER=${DB_SUPERUSER}
+      - POSTGRES_PASSWORD=${DB_SUPERUSER_PWD}
+      - POSTGRES_DB=${DB_NAME}
+      - DB_AUTHENTICATOR=${DB_AUTHENTICATOR}
+      - DB_AUTHENTICATOR_PWD=${DB_AUTHENTICATOR_PWD}
+      - JWT_AT_SECRET=${JWT_AT_SECRET}
+      - JWT_RT_SECRET=${JWT_RT_SECRET}
+    volumes:
+      - ./db:/docker-entrypoint-initdb.d
+      #- ./store/db:/var/lib/postgresql/data
+
+  ### PostgREST ###
+  pr-adm:
+    image: postgrest/postgrest:latest
+    ports:
+      - 3000:3000
+    links:
+      - pg
+    depends_on:
+      - pg
+    environment:
+      - PGRST_DB_URI=postgres://${DB_AUTHENTICATOR}:${DB_AUTHENTICATOR_PWD}@pg:5432/${DB_NAME}
+      - PGRST_DB_SCHEMA=api
+      - PGRST_DB_ANON_ROLE=anon
+      #- PGRST_DB_POOL=${DB_POOL} 
+      - PGRST_JWT_SECRET=${JWT_AT_SECRET}  
+      #- PGRST_MAX_ROWS=${MAX_ROWS} 
+      #- PGRST_PRE_REQUEST=${PRE_REQUEST}
+      #- PGRST_SERVER_PROXY_URI=${SERVER_PROXY_URI}
+
+ 
+  ### Nginx ###
+  ng:
+    build:
+      context: ./nginx
+    network_mode: host
+    #ports:
+    #  - 81:81
+    #  - 82:82
+    #links:
+    #  - pg
+    #  - pr-adm
+    #  - pr-site
+    environment:
+      - TZ=Asia/Yekaterinburg
+      - JWT_SECRET=${JWT_AT_SECRET}
+    volumes:
+      - ./nginx/entrypoint.sh:/entrypoint.sh:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/lua:/lua
+      #- ./nginx/log:/var/log/nginx
+      - ./store/upload:/store/upload
+    entrypoint: /entrypoint.sh
